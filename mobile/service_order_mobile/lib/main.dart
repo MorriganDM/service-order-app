@@ -41,16 +41,16 @@ class ServiceOrder {
   });
 
   String get createdAtLabel {
-  final localDate = createdAt.toLocal();
+    final localDate = createdAt.toLocal();
 
-  final day = localDate.day.toString().padLeft(2, '0');
-  final month = localDate.month.toString().padLeft(2, '0');
-  final year = localDate.year.toString();
-  final hour = localDate.hour.toString().padLeft(2, '0');
-  final minute = localDate.minute.toString().padLeft(2, '0');
+    final day = localDate.day.toString().padLeft(2, '0');
+    final month = localDate.month.toString().padLeft(2, '0');
+    final year = localDate.year.toString();
+    final hour = localDate.hour.toString().padLeft(2, '0');
+    final minute = localDate.minute.toString().padLeft(2, '0');
 
-  return '$day/$month/$year às $hour:$minute';
-}
+    return '$day/$month/$year às $hour:$minute';
+  }
 
   factory ServiceOrder.fromJson(Map<String, dynamic> json) {
     return ServiceOrder(
@@ -298,6 +298,15 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
     );
   }
 
+  Future<void> openOrderDetails(ServiceOrder order) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return ServiceOrderDetailsDialog(order: order);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -366,6 +375,7 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
                               order: order,
                               onStatusChanged: updateOrderStatus,
                               onDelete: deleteOrder,
+                              onViewDetails: openOrderDetails,
                             );
                           },
                         ),
@@ -381,14 +391,17 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
 
 class ServiceOrderCard extends StatelessWidget {
   final ServiceOrder order;
-  final Future<void> Function(ServiceOrder order, String status) onStatusChanged;
+  final Future<void> Function(ServiceOrder order, String status)
+  onStatusChanged;
   final Future<void> Function(ServiceOrder order) onDelete;
+  final Future<void> Function(ServiceOrder order) onViewDetails;
 
   const ServiceOrderCard({
     super.key,
     required this.order,
     required this.onStatusChanged,
     required this.onDelete,
+    required this.onViewDetails,
   });
 
   bool get canStart => order.status == 'open';
@@ -409,9 +422,7 @@ class ServiceOrderCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: colorScheme.outlineVariant,
-        ),
+        side: BorderSide(color: colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -474,10 +485,7 @@ class ServiceOrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Divider(
-              height: 1,
-              color: colorScheme.outlineVariant,
-            ),
+            Divider(height: 1, color: colorScheme.outlineVariant),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -486,6 +494,13 @@ class ServiceOrderCard extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await onViewDetails(order);
+                    },
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Detalhes'),
+                  ),
                   if (canStart)
                     FilledButton.tonalIcon(
                       onPressed: () async {
@@ -551,11 +566,7 @@ class _InfoText extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 17,
-          color: colorScheme.primary,
-        ),
+        Icon(icon, size: 17, color: colorScheme.primary),
         const SizedBox(width: 6),
         Text(
           '$label: ',
@@ -575,13 +586,136 @@ class _InfoText extends StatelessWidget {
   }
 }
 
+class ServiceOrderDetailsDialog extends StatelessWidget {
+  final ServiceOrder order;
+
+  const ServiceOrderDetailsDialog({super.key, required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Expanded(child: Text('Ordem #${order.id}')),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close),
+            tooltip: 'Fechar',
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                order.title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                order.description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusChip(status: order.status),
+                  PriorityChip(priority: order.priority),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Divider(),
+              const SizedBox(height: 12),
+              _DetailRow(
+                icon: Icons.business,
+                label: 'Cliente',
+                value: order.customerName,
+              ),
+              const SizedBox(height: 10),
+              _DetailRow(
+                icon: Icons.schedule,
+                label: 'Criada em',
+                value: order.createdAtLabel,
+              ),
+              const SizedBox(height: 10),
+              _DetailRow(
+                icon: Icons.numbers,
+                label: 'Identificador',
+                value: '#${order.id}',
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 19, color: colorScheme.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface,
+              ),
+              children: [
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class StatusChip extends StatelessWidget {
   final String status;
 
-  const StatusChip({
-    super.key,
-    required this.status,
-  });
+  const StatusChip({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -636,10 +770,7 @@ class StatusChip extends StatelessWidget {
 class PriorityChip extends StatelessWidget {
   final String priority;
 
-  const PriorityChip({
-    super.key,
-    required this.priority,
-  });
+  const PriorityChip({super.key, required this.priority});
 
   @override
   Widget build(BuildContext context) {
@@ -701,10 +832,7 @@ class _LabelChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
@@ -712,11 +840,7 @@ class _LabelChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: foregroundColor,
-          ),
+          Icon(icon, size: 16, color: foregroundColor),
           const SizedBox(width: 6),
           Text(
             label,
