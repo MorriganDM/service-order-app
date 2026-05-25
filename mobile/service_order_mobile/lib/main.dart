@@ -40,6 +40,18 @@ class ServiceOrder {
     required this.createdAt,
   });
 
+  String get createdAtLabel {
+  final localDate = createdAt.toLocal();
+
+  final day = localDate.day.toString().padLeft(2, '0');
+  final month = localDate.month.toString().padLeft(2, '0');
+  final year = localDate.year.toString();
+  final hour = localDate.hour.toString().padLeft(2, '0');
+  final minute = localDate.minute.toString().padLeft(2, '0');
+
+  return '$day/$month/$year às $hour:$minute';
+}
+
   factory ServiceOrder.fromJson(Map<String, dynamic> json) {
     return ServiceOrder(
       id: json['id'],
@@ -136,6 +148,16 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
   final ServiceOrdersApi api = ServiceOrdersApi();
 
   late Future<List<ServiceOrder>> serviceOrdersFuture;
+
+  String selectedStatusFilter = 'all';
+
+  static const Map<String, String> statusFilterLabels = {
+    'all': 'Todas',
+    'open': 'Abertas',
+    'in_progress': 'Em andamento',
+    'done': 'Concluídas',
+    'cancelled': 'Canceladas',
+  };
 
   @override
   void initState() {
@@ -240,6 +262,42 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
     }
   }
 
+  List<ServiceOrder> filterServiceOrders(List<ServiceOrder> orders) {
+    if (selectedStatusFilter == 'all') {
+      return orders;
+    }
+
+    return orders
+        .where((order) => order.status == selectedStatusFilter)
+        .toList();
+  }
+
+  Widget buildStatusFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: statusFilterLabels.entries.map((entry) {
+          final status = entry.key;
+          final label = entry.value;
+          final isSelected = selectedStatusFilter == status;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) {
+                setState(() {
+                  selectedStatusFilter = status;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -278,29 +336,42 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
           }
 
           final serviceOrders = snapshot.data ?? [];
+          final filteredServiceOrders = filterServiceOrders(serviceOrders);
 
-          if (serviceOrders.isEmpty) {
-            return const Center(
-              child: Text('Nenhuma ordem de serviço cadastrada.'),
-            );
-          }
+          final emptyMessage = serviceOrders.isEmpty
+              ? 'Nenhuma ordem de serviço cadastrada.'
+              : 'Nenhuma ordem encontrada para este filtro.';
 
-          return RefreshIndicator(
-            onRefresh: reloadServiceOrders,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: serviceOrders.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final order = serviceOrders[index];
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: buildStatusFilters(),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: filteredServiceOrders.isEmpty
+                    ? Center(child: Text(emptyMessage))
+                    : RefreshIndicator(
+                        onRefresh: reloadServiceOrders,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filteredServiceOrders.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final order = filteredServiceOrders[index];
 
-                return ServiceOrderCard(
-                  order: order,
-                  onStatusChanged: updateOrderStatus,
-                  onDelete: deleteOrder,
-                );
-              },
-            ),
+                            return ServiceOrderCard(
+                              order: order,
+                              onStatusChanged: updateOrderStatus,
+                              onDelete: deleteOrder,
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
           );
         },
       ),
@@ -310,8 +381,7 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
 
 class ServiceOrderCard extends StatelessWidget {
   final ServiceOrder order;
-  final Future<void> Function(ServiceOrder order, String status)
-  onStatusChanged;
+  final Future<void> Function(ServiceOrder order, String status) onStatusChanged;
   final Future<void> Function(ServiceOrder order) onDelete;
 
   const ServiceOrderCard({
@@ -331,30 +401,70 @@ class ServiceOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Card(
       elevation: 1,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: colorScheme.outlineVariant,
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              order.title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    order.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '#${order.id}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.outline,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            Text(order.description),
-            const SizedBox(height: 12),
             Text(
-              'Cliente: ${order.customerName}',
-              style: Theme.of(context).textTheme.bodyMedium,
+              order.description,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _InfoText(
+                  icon: Icons.business,
+                  label: 'Cliente',
+                  value: order.customerName,
+                ),
+                _InfoText(
+                  icon: Icons.schedule,
+                  label: 'Criada em',
+                  value: order.createdAtLabel,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -364,7 +474,10 @@ class ServiceOrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: colorScheme.outlineVariant,
+            ),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -419,24 +532,103 @@ class ServiceOrderCard extends StatelessWidget {
   }
 }
 
-class StatusChip extends StatelessWidget {
-  final String status;
+class _InfoText extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
 
-  const StatusChip({super.key, required this.status});
+  const _InfoText({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (status) {
-      'open' => 'Aberta',
-      'in_progress' => 'Em andamento',
-      'done' => 'Concluída',
-      'cancelled' => 'Cancelada',
-      _ => status,
-    };
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    return Chip(
-      avatar: const Icon(Icons.assignment, size: 18),
-      label: Text(label),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 17,
+          color: colorScheme.primary,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label: ',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          value,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class StatusChip extends StatelessWidget {
+  final String status;
+
+  const StatusChip({
+    super.key,
+    required this.status,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final String label;
+    final IconData icon;
+    final Color backgroundColor;
+    final Color foregroundColor;
+
+    switch (status) {
+      case 'open':
+        label = 'Aberta';
+        icon = Icons.radio_button_unchecked;
+        backgroundColor = colorScheme.primaryContainer;
+        foregroundColor = colorScheme.onPrimaryContainer;
+        break;
+      case 'in_progress':
+        label = 'Em andamento';
+        icon = Icons.sync;
+        backgroundColor = colorScheme.secondaryContainer;
+        foregroundColor = colorScheme.onSecondaryContainer;
+        break;
+      case 'done':
+        label = 'Concluída';
+        icon = Icons.check_circle_outline;
+        backgroundColor = Colors.green.shade100;
+        foregroundColor = Colors.green.shade900;
+        break;
+      case 'cancelled':
+        label = 'Cancelada';
+        icon = Icons.cancel_outlined;
+        backgroundColor = Colors.red.shade100;
+        foregroundColor = Colors.red.shade900;
+        break;
+      default:
+        label = status;
+        icon = Icons.help_outline;
+        backgroundColor = colorScheme.surfaceContainerHighest;
+        foregroundColor = colorScheme.onSurfaceVariant;
+    }
+
+    return _LabelChip(
+      icon: icon,
+      label: label,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
     );
   }
 }
@@ -444,18 +636,99 @@ class StatusChip extends StatelessWidget {
 class PriorityChip extends StatelessWidget {
   final String priority;
 
-  const PriorityChip({super.key, required this.priority});
+  const PriorityChip({
+    super.key,
+    required this.priority,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (priority) {
-      'low' => 'Baixa',
-      'medium' => 'Média',
-      'high' => 'Alta',
-      _ => priority,
-    };
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Chip(avatar: const Icon(Icons.flag, size: 18), label: Text(label));
+    final String label;
+    final IconData icon;
+    final Color backgroundColor;
+    final Color foregroundColor;
+
+    switch (priority) {
+      case 'low':
+        label = 'Baixa';
+        icon = Icons.keyboard_arrow_down;
+        backgroundColor = colorScheme.surfaceContainerHighest;
+        foregroundColor = colorScheme.onSurfaceVariant;
+        break;
+      case 'medium':
+        label = 'Média';
+        icon = Icons.flag_outlined;
+        backgroundColor = Colors.amber.shade100;
+        foregroundColor = Colors.amber.shade900;
+        break;
+      case 'high':
+        label = 'Alta';
+        icon = Icons.priority_high;
+        backgroundColor = Colors.deepOrange.shade100;
+        foregroundColor = Colors.deepOrange.shade900;
+        break;
+      default:
+        label = priority;
+        icon = Icons.flag_outlined;
+        backgroundColor = colorScheme.surfaceContainerHighest;
+        foregroundColor = colorScheme.onSurfaceVariant;
+    }
+
+    return _LabelChip(
+      icon: icon,
+      label: label,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
+    );
+  }
+}
+
+class _LabelChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  const _LabelChip({
+    required this.icon,
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: foregroundColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: foregroundColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
