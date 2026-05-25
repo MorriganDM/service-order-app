@@ -1,18 +1,5 @@
-# Python
+.venv/
+.env
+service_orders.db
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-
-# Virtual environment
-backend/.venv/
-
-# Local database
-backend/service_orders.db
-
-# Editor
-.vscode/
-
-# OS
-.DS_Store
-Thumbs.db
