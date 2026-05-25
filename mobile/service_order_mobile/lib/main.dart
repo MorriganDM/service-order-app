@@ -101,6 +101,27 @@ class ServiceOrdersApi {
       throw Exception('Erro ao criar ordem de serviço.');
     }
   }
+
+  Future<void> updateServiceOrderStatus({
+  required int id,
+  required String status,
+  }) async {
+    final uri = Uri.parse('$baseUrl/service-orders/$id');
+
+    final response = await http.put(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'status': status,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao atualizar status da ordem de serviço.');
+    }
+  }
 }
 
 class ServiceOrdersPage extends StatefulWidget {
@@ -139,6 +160,37 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
 
   if (wasCreated == true) {
     reloadServiceOrders();
+  }
+}
+
+Future<void> updateOrderStatus(ServiceOrder order, String status) async {
+  try {
+    await api.updateServiceOrderStatus(
+      id: order.id,
+      status: status,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Status atualizado com sucesso.'),
+      ),
+    );
+
+    reloadServiceOrders();
+  } catch (error) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erro ao atualizar status: $error'),
+      ),
+    );
   }
 }
 
@@ -198,7 +250,10 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
               itemBuilder: (context, index) {
                 final order = serviceOrders[index];
 
-                return ServiceOrderCard(order: order);
+                return ServiceOrderCard(
+                  order: order,
+                  onStatusChanged: updateOrderStatus,
+                );
               },
             ),
           );
@@ -210,10 +265,12 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
 
 class ServiceOrderCard extends StatelessWidget {
   final ServiceOrder order;
+  final Future<void> Function(ServiceOrder order, String status) onStatusChanged;
 
   const ServiceOrderCard({
     super.key,
     required this.order,
+    required this.onStatusChanged,
   });
 
   @override
@@ -245,6 +302,37 @@ class ServiceOrderCard extends StatelessWidget {
               children: [
                 StatusChip(status: order.status),
                 PriorityChip(priority: order.priority),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (order.status == 'open')
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await onStatusChanged(order, 'in_progress');
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Iniciar'),
+                  ),
+                if (order.status == 'open' || order.status == 'in_progress')
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await onStatusChanged(order, 'done');
+                    },
+                    icon: const Icon(Icons.check),
+                    label: const Text('Concluir'),
+                  ),
+                if (order.status != 'done' && order.status != 'cancelled')
+                  TextButton.icon(
+                    onPressed: () async {
+                      await onStatusChanged(order, 'cancelled');
+                    },
+                    icon: const Icon(Icons.cancel),
+                    label: const Text('Cancelar'),
+                  ),
               ],
             ),
           ],
