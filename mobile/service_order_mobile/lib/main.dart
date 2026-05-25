@@ -29,6 +29,7 @@ class ServiceOrder {
   final String status;
   final String priority;
   final DateTime createdAt;
+  final DateTime? updatedAt;
 
   ServiceOrder({
     required this.id,
@@ -38,10 +39,23 @@ class ServiceOrder {
     required this.status,
     required this.priority,
     required this.createdAt,
+    required this.updatedAt,
   });
 
   String get createdAtLabel {
-    final localDate = createdAt.toLocal();
+    return formatDate(createdAt);
+  }
+
+  String get updatedAtLabel {
+    if (updatedAt == null) {
+      return '—';
+    }
+
+    return formatDate(updatedAt!);
+  }
+
+  static String formatDate(DateTime date) {
+    final localDate = date.toLocal();
 
     final day = localDate.day.toString().padLeft(2, '0');
     final month = localDate.month.toString().padLeft(2, '0');
@@ -61,6 +75,9 @@ class ServiceOrder {
       status: json['status'],
       priority: json['priority'],
       createdAt: DateTime.parse(json['created_at']),
+      updatedAt: json['updated_at'] == null
+          ? null
+          : DateTime.parse(json['updated_at']),
     );
   }
 }
@@ -82,16 +99,6 @@ class ServiceOrdersApi {
     return data
         .map((item) => ServiceOrder.fromJson(item as Map<String, dynamic>))
         .toList();
-  }
-
-  Future<void> deleteServiceOrder({required int id}) async {
-    final uri = Uri.parse('$baseUrl/service-orders/$id');
-
-    final response = await http.delete(uri);
-
-    if (response.statusCode != 204) {
-      throw Exception('Erro ao excluir ordem de serviço.');
-    }
   }
 
   Future<void> createServiceOrder({
@@ -119,6 +126,31 @@ class ServiceOrdersApi {
     }
   }
 
+  Future<void> updateServiceOrder({
+    required int id,
+    required String title,
+    required String description,
+    required String customerName,
+    required String priority,
+  }) async {
+    final uri = Uri.parse('$baseUrl/service-orders/$id');
+
+    final response = await http.put(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'title': title,
+        'description': description,
+        'customer_name': customerName,
+        'priority': priority,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao atualizar ordem de serviço.');
+    }
+  }
+
   Future<void> updateServiceOrderStatus({
     required int id,
     required String status,
@@ -133,6 +165,16 @@ class ServiceOrdersApi {
 
     if (response.statusCode != 200) {
       throw Exception('Erro ao atualizar status da ordem de serviço.');
+    }
+  }
+
+  Future<void> deleteServiceOrder({required int id}) async {
+    final uri = Uri.parse('$baseUrl/service-orders/$id');
+
+    final response = await http.delete(uri);
+
+    if (response.statusCode != 204) {
+      throw Exception('Erro ao excluir ordem de serviço.');
     }
   }
 }
@@ -173,6 +215,42 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
     await serviceOrdersFuture;
   }
 
+  List<ServiceOrder> filterServiceOrders(List<ServiceOrder> orders) {
+    if (selectedStatusFilter == 'all') {
+      return orders;
+    }
+
+    return orders
+        .where((order) => order.status == selectedStatusFilter)
+        .toList();
+  }
+
+  Widget buildStatusFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: statusFilterLabels.entries.map((entry) {
+          final status = entry.key;
+          final label = entry.value;
+          final isSelected = selectedStatusFilter == status;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) {
+                setState(() {
+                  selectedStatusFilter = status;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Future<void> openCreateOrderDialog() async {
     final wasCreated = await showDialog<bool>(
       context: context,
@@ -182,6 +260,28 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
     );
 
     if (wasCreated == true) {
+      await reloadServiceOrders();
+    }
+  }
+
+  Future<void> openOrderDetails(ServiceOrder order) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return ServiceOrderDetailsDialog(order: order);
+      },
+    );
+  }
+
+  Future<void> openEditOrderDialog(ServiceOrder order) async {
+    final wasUpdated = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return EditServiceOrderDialog(api: api, order: order);
+      },
+    );
+
+    if (wasUpdated == true) {
       await reloadServiceOrders();
     }
   }
@@ -262,51 +362,6 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
     }
   }
 
-  List<ServiceOrder> filterServiceOrders(List<ServiceOrder> orders) {
-    if (selectedStatusFilter == 'all') {
-      return orders;
-    }
-
-    return orders
-        .where((order) => order.status == selectedStatusFilter)
-        .toList();
-  }
-
-  Widget buildStatusFilters() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: statusFilterLabels.entries.map((entry) {
-          final status = entry.key;
-          final label = entry.value;
-          final isSelected = selectedStatusFilter == status;
-
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(label),
-              selected: isSelected,
-              onSelected: (_) {
-                setState(() {
-                  selectedStatusFilter = status;
-                });
-              },
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Future<void> openOrderDetails(ServiceOrder order) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return ServiceOrderDetailsDialog(order: order);
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -376,6 +431,7 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
                               onStatusChanged: updateOrderStatus,
                               onDelete: deleteOrder,
                               onViewDetails: openOrderDetails,
+                              onEdit: openEditOrderDialog,
                             );
                           },
                         ),
@@ -395,6 +451,7 @@ class ServiceOrderCard extends StatelessWidget {
   onStatusChanged;
   final Future<void> Function(ServiceOrder order) onDelete;
   final Future<void> Function(ServiceOrder order) onViewDetails;
+  final Future<void> Function(ServiceOrder order) onEdit;
 
   const ServiceOrderCard({
     super.key,
@@ -402,6 +459,7 @@ class ServiceOrderCard extends StatelessWidget {
     required this.onStatusChanged,
     required this.onDelete,
     required this.onViewDetails,
+    required this.onEdit,
   });
 
   bool get canStart => order.status == 'open';
@@ -411,6 +469,8 @@ class ServiceOrderCard extends StatelessWidget {
   bool get canCancel => order.status == 'open' || order.status == 'in_progress';
 
   bool get canDelete => order.status == 'done' || order.status == 'cancelled';
+
+  bool get canEdit => order.status == 'open' || order.status == 'in_progress';
 
   @override
   Widget build(BuildContext context) {
@@ -459,21 +519,48 @@ class ServiceOrderCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _InfoText(
-                  icon: Icons.business,
-                  label: 'Cliente',
-                  value: order.customerName,
-                ),
-                _InfoText(
-                  icon: Icons.schedule,
-                  label: 'Criada em',
-                  value: order.createdAtLabel,
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final leftInfo = Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    _InfoText(
+                      icon: Icons.business,
+                      label: 'Cliente',
+                      value: order.customerName,
+                    ),
+                    _InfoText(
+                      icon: Icons.schedule,
+                      label: 'Criada em',
+                      value: order.createdAtLabel,
+                    ),
+                  ],
+                );
+
+                final rightInfo = _InfoText(
+                  icon: Icons.update,
+                  label: 'Última edição',
+                  value: order.updatedAtLabel,
+                );
+
+                if (constraints.maxWidth < 760) {
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [leftInfo, rightInfo],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: leftInfo),
+                    const SizedBox(width: 12),
+                    rightInfo,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -501,6 +588,14 @@ class ServiceOrderCard extends StatelessWidget {
                     icon: const Icon(Icons.visibility_outlined),
                     label: const Text('Detalhes'),
                   ),
+                  if (canEdit)
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await onEdit(order);
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
                   if (canStart)
                     FilledButton.tonalIcon(
                       onPressed: () async {
@@ -649,6 +744,12 @@ class ServiceOrderDetailsDialog extends StatelessWidget {
                 icon: Icons.schedule,
                 label: 'Criada em',
                 value: order.createdAtLabel,
+              ),
+              const SizedBox(height: 10),
+              _DetailRow(
+                icon: Icons.update,
+                label: 'Última edição',
+                value: order.updatedAtLabel,
               ),
               const SizedBox(height: 10),
               _DetailRow(
@@ -1022,6 +1123,199 @@ class _CreateServiceOrderDialogState extends State<CreateServiceOrderDialog> {
                 )
               : const Icon(Icons.save),
           label: const Text('Salvar'),
+        ),
+      ],
+    );
+  }
+}
+
+class EditServiceOrderDialog extends StatefulWidget {
+  final ServiceOrdersApi api;
+  final ServiceOrder order;
+
+  const EditServiceOrderDialog({
+    super.key,
+    required this.api,
+    required this.order,
+  });
+
+  @override
+  State<EditServiceOrderDialog> createState() => _EditServiceOrderDialogState();
+}
+
+class _EditServiceOrderDialogState extends State<EditServiceOrderDialog> {
+  final formKey = GlobalKey<FormState>();
+
+  late final TextEditingController titleController;
+  late final TextEditingController descriptionController;
+  late final TextEditingController customerNameController;
+
+  late String priority;
+
+  bool isSaving = false;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+
+    titleController = TextEditingController(text: widget.order.title);
+    descriptionController = TextEditingController(
+      text: widget.order.description,
+    );
+    customerNameController = TextEditingController(
+      text: widget.order.customerName,
+    );
+
+    priority = widget.order.priority;
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    customerNameController.dispose();
+
+    super.dispose();
+  }
+
+  Future<void> saveServiceOrder() async {
+    if (!formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+      errorMessage = null;
+    });
+
+    try {
+      await widget.api.updateServiceOrder(
+        id: widget.order.id,
+        title: titleController.text.trim(),
+        description: descriptionController.text.trim(),
+        customerName: customerNameController.text.trim(),
+        priority: priority,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      setState(() {
+        errorMessage = error.toString();
+        isSaving = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Editar ordem #${widget.order.id}'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Título',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().length < 3) {
+                      return 'Informe um título com pelo menos 3 caracteres.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: customerNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Cliente',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().length < 2) {
+                      return 'Informe o nome do cliente.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Descrição',
+                    border: OutlineInputBorder(),
+                  ),
+                  minLines: 3,
+                  maxLines: 5,
+                  validator: (value) {
+                    if (value == null || value.trim().length < 5) {
+                      return 'Informe uma descrição com pelo menos 5 caracteres.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: priority,
+                  decoration: const InputDecoration(
+                    labelText: 'Prioridade',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'low', child: Text('Baixa')),
+                    DropdownMenuItem(value: 'medium', child: Text('Média')),
+                    DropdownMenuItem(value: 'high', child: Text('Alta')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        priority = value;
+                      });
+                    }
+                  },
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: isSaving ? null : saveServiceOrder,
+          icon: isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save),
+          label: const Text('Salvar alterações'),
         ),
       ],
     );

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models import ServiceOrder
 from .schemas import ServiceOrderCreate, ServiceOrderRead, ServiceOrderUpdate
-
+from datetime import datetime
 
 router = APIRouter(
     prefix="/service-orders",
@@ -74,6 +74,8 @@ def update_service_order(
 
     for field, value in update_data.items():
         setattr(service_order, field, value)
+
+    service_order.updated_at = datetime.now()
 
     db.commit()
     db.refresh(service_order)

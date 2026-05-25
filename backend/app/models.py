@@ -23,3 +23,8 @@ class ServiceOrder(Base):
         default=datetime.now,
         nullable=False,
     )
+
+    updated_at: Mapped[datetime | None] = mapped_column(
+    DateTime,
+    nullable=True,
+    )
