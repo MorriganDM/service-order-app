@@ -15,10 +15,7 @@ class ServiceOrdersApp extends StatelessWidget {
     return MaterialApp(
       title: 'Service Orders',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
       home: const ServiceOrdersPage(),
     );
   }
@@ -75,26 +72,34 @@ class ServiceOrdersApi {
         .toList();
   }
 
+  Future<void> deleteServiceOrder({required int id}) async {
+    final uri = Uri.parse('$baseUrl/service-orders/$id');
+
+    final response = await http.delete(uri);
+
+    if (response.statusCode != 204) {
+      throw Exception('Erro ao excluir ordem de serviço.');
+    }
+  }
+
   Future<void> createServiceOrder({
     required String title,
     required String description,
     required String customerName,
     required String priority,
   }) async {
-      final uri = Uri.parse('$baseUrl/service-orders');
+    final uri = Uri.parse('$baseUrl/service-orders');
 
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'title': title,
-          'description': description,
-          'customer_name': customerName,
-          'status': 'open',
-          'priority': priority,
-        }),
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'title': title,
+        'description': description,
+        'customer_name': customerName,
+        'status': 'open',
+        'priority': priority,
+      }),
     );
 
     if (response.statusCode != 201) {
@@ -103,19 +108,15 @@ class ServiceOrdersApi {
   }
 
   Future<void> updateServiceOrderStatus({
-  required int id,
-  required String status,
+    required int id,
+    required String status,
   }) async {
     final uri = Uri.parse('$baseUrl/service-orders/$id');
 
     final response = await http.put(
       uri,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'status': status,
-      }),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'status': status}),
     );
 
     if (response.statusCode != 200) {
@@ -151,48 +152,93 @@ class _ServiceOrdersPageState extends State<ServiceOrdersPage> {
   }
 
   Future<void> openCreateOrderDialog() async {
-  final wasCreated = await showDialog<bool>(
-    context: context,
-    builder: (context) {
-      return CreateServiceOrderDialog(api: api);
-    },
-  );
-
-  if (wasCreated == true) {
-    reloadServiceOrders();
-  }
-}
-
-Future<void> updateOrderStatus(ServiceOrder order, String status) async {
-  try {
-    await api.updateServiceOrderStatus(
-      id: order.id,
-      status: status,
+    final wasCreated = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return CreateServiceOrderDialog(api: api);
+      },
     );
 
-    if (!mounted) {
+    if (wasCreated == true) {
+      await reloadServiceOrders();
+    }
+  }
+
+  Future<void> updateOrderStatus(ServiceOrder order, String status) async {
+    try {
+      await api.updateServiceOrderStatus(id: order.id, status: status);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Status atualizado com sucesso.')),
+      );
+
+      await reloadServiceOrders();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao atualizar status: $error')),
+      );
+    }
+  }
+
+  Future<void> deleteOrder(ServiceOrder order) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Excluir ordem de serviço?'),
+          content: Text(
+            'Tem certeza que deseja excluir a ordem "${order.title}"?\n\n'
+            'Essa ação não poderá ser desfeita.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.delete),
+              label: const Text('Excluir'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Status atualizado com sucesso.'),
-      ),
-    );
+    try {
+      await api.deleteServiceOrder(id: order.id);
 
-    reloadServiceOrders();
-  } catch (error) {
-    if (!mounted) {
-      return;
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ordem excluída com sucesso.')),
+      );
+
+      await reloadServiceOrders();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao excluir ordem: $error')));
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Erro ao atualizar status: $error'),
-      ),
-    );
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -216,9 +262,7 @@ Future<void> updateOrderStatus(ServiceOrder order, String status) async {
         future: serviceOrdersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
@@ -246,13 +290,14 @@ Future<void> updateOrderStatus(ServiceOrder order, String status) async {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: serviceOrders.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final order = serviceOrders[index];
 
                 return ServiceOrderCard(
                   order: order,
                   onStatusChanged: updateOrderStatus,
+                  onDelete: deleteOrder,
                 );
               },
             ),
@@ -265,18 +310,32 @@ Future<void> updateOrderStatus(ServiceOrder order, String status) async {
 
 class ServiceOrderCard extends StatelessWidget {
   final ServiceOrder order;
-  final Future<void> Function(ServiceOrder order, String status) onStatusChanged;
+  final Future<void> Function(ServiceOrder order, String status)
+  onStatusChanged;
+  final Future<void> Function(ServiceOrder order) onDelete;
 
   const ServiceOrderCard({
     super.key,
     required this.order,
     required this.onStatusChanged,
+    required this.onDelete,
   });
+
+  bool get canStart => order.status == 'open';
+
+  bool get canFinish => order.status == 'in_progress';
+
+  bool get canCancel => order.status == 'open' || order.status == 'in_progress';
+
+  bool get canDelete => order.status == 'done' || order.status == 'cancelled';
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       elevation: 1,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -284,9 +343,9 @@ class ServiceOrderCard extends StatelessWidget {
           children: [
             Text(
               order.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(order.description),
@@ -304,36 +363,54 @@ class ServiceOrderCard extends StatelessWidget {
                 PriorityChip(priority: order.priority),
               ],
             ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (order.status == 'open')
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await onStatusChanged(order, 'in_progress');
-                    },
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Iniciar'),
-                  ),
-                if (order.status == 'open' || order.status == 'in_progress')
-                  FilledButton.icon(
-                    onPressed: () async {
-                      await onStatusChanged(order, 'done');
-                    },
-                    icon: const Icon(Icons.check),
-                    label: const Text('Concluir'),
-                  ),
-                if (order.status != 'done' && order.status != 'cancelled')
-                  TextButton.icon(
-                    onPressed: () async {
-                      await onStatusChanged(order, 'cancelled');
-                    },
-                    icon: const Icon(Icons.cancel),
-                    label: const Text('Cancelar'),
-                  ),
-              ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (canStart)
+                    FilledButton.tonalIcon(
+                      onPressed: () async {
+                        await onStatusChanged(order, 'in_progress');
+                      },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Iniciar'),
+                    ),
+                  if (canFinish)
+                    FilledButton.icon(
+                      onPressed: () async {
+                        await onStatusChanged(order, 'done');
+                      },
+                      icon: const Icon(Icons.check),
+                      label: const Text('Concluir'),
+                    ),
+                  if (canCancel)
+                    TextButton.icon(
+                      onPressed: () async {
+                        await onStatusChanged(order, 'cancelled');
+                      },
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Cancelar'),
+                    ),
+                  if (canDelete)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colorScheme.error,
+                        side: BorderSide(color: colorScheme.error),
+                      ),
+                      onPressed: () async {
+                        await onDelete(order);
+                      },
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Excluir'),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
@@ -345,10 +422,7 @@ class ServiceOrderCard extends StatelessWidget {
 class StatusChip extends StatelessWidget {
   final String status;
 
-  const StatusChip({
-    super.key,
-    required this.status,
-  });
+  const StatusChip({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -370,10 +444,7 @@ class StatusChip extends StatelessWidget {
 class PriorityChip extends StatelessWidget {
   final String priority;
 
-  const PriorityChip({
-    super.key,
-    required this.priority,
-  });
+  const PriorityChip({super.key, required this.priority});
 
   @override
   Widget build(BuildContext context) {
@@ -384,20 +455,14 @@ class PriorityChip extends StatelessWidget {
       _ => priority,
     };
 
-    return Chip(
-      avatar: const Icon(Icons.flag, size: 18),
-      label: Text(label),
-    );
+    return Chip(avatar: const Icon(Icons.flag, size: 18), label: Text(label));
   }
 }
 
 class CreateServiceOrderDialog extends StatefulWidget {
   final ServiceOrdersApi api;
 
-  const CreateServiceOrderDialog({
-    super.key,
-    required this.api,
-  });
+  const CreateServiceOrderDialog({super.key, required this.api});
 
   @override
   State<CreateServiceOrderDialog> createState() =>
@@ -513,24 +578,15 @@ class _CreateServiceOrderDialogState extends State<CreateServiceOrderDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: priority,
+                  initialValue: priority,
                   decoration: const InputDecoration(
                     labelText: 'Prioridade',
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(
-                      value: 'low',
-                      child: Text('Baixa'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'medium',
-                      child: Text('Média'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'high',
-                      child: Text('Alta'),
-                    ),
+                    DropdownMenuItem(value: 'low', child: Text('Baixa')),
+                    DropdownMenuItem(value: 'medium', child: Text('Média')),
+                    DropdownMenuItem(value: 'high', child: Text('Alta')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
