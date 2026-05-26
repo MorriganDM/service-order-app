@@ -1,4 +1,4 @@
-# Service Orders App
+﻿# Service Orders App
 
 Mini projeto de estudo criado para praticar desenvolvimento full stack com Python, FastAPI, PostgreSQL e Flutter.
 
@@ -10,6 +10,8 @@ O projeto foi criado como estudo direcionado para uma vaga com foco em Flutter, 
 
 O projeto possui um backend em FastAPI conectado a PostgreSQL e uma interface em Flutter Web consumindo a API.
 
+O backend também pode ser executado com Docker Compose, subindo automaticamente a API e um banco PostgreSQL em containers.
+
 ### Backend
 
 - API REST com FastAPI
@@ -20,6 +22,7 @@ O projeto possui um backend em FastAPI conectado a PostgreSQL e uma interface em
 - Configuração de banco via variável de ambiente
 - Registro de data de criação e última edição
 - Documentação automática via Swagger/OpenAPI
+- Execução opcional com Docker Compose
 
 ### Flutter
 
@@ -71,6 +74,8 @@ O sistema permite criar uma ordem de serviço, acompanhar seu status e realizar 
 - GitHub
 - VS Code
 - PowerShell
+- Docker
+- Docker Compose
 
 ## Estrutura do projeto
 
@@ -83,6 +88,8 @@ service-order-app/
       models.py
       schemas.py
       routes.py
+    Dockerfile
+    .dockerignore
     .env.example
     requirements.txt
 
@@ -110,6 +117,7 @@ service-order-app/
   docs/
     screenshots/
 
+  docker-compose.yml
   README.md
 ```
 
@@ -161,7 +169,7 @@ DATABASE_URL=postgresql+psycopg://service_orders_user:service_orders_password@lo
 
 > O arquivo `.env` contém configuração local e não deve ser enviado para o GitHub.
 
-## Como rodar o backend
+## Como rodar o backend manualmente
 
 Entre na pasta do backend:
 
@@ -194,6 +202,100 @@ Acesse a documentação Swagger:
 http://127.0.0.1:8000/docs
 ```
 
+## Como rodar com Docker
+
+O backend também pode ser executado com Docker Compose, subindo automaticamente a API FastAPI e um banco PostgreSQL em containers.
+
+Essa opção evita a necessidade de configurar manualmente o PostgreSQL local para testar o projeto.
+
+### Pré-requisitos
+
+- Docker Desktop instalado
+- Docker Compose disponível
+- Docker Desktop em execução
+
+Verifique a instalação:
+
+```powershell
+docker --version
+docker compose version
+```
+
+### Subir API + PostgreSQL
+
+Na raiz do projeto, execute:
+
+```powershell
+docker compose up --build
+```
+
+Isso irá:
+
+- baixar a imagem do PostgreSQL;
+- construir a imagem da API FastAPI;
+- criar um volume para persistir os dados do banco;
+- expor a API em `http://127.0.0.1:8000`;
+- expor o PostgreSQL do container na porta local `5433`.
+
+A documentação Swagger ficará disponível em:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Portas usadas
+
+| Serviço | Porta local | Porta no container |
+|---|---:|---:|
+| FastAPI | 8000 | 8000 |
+| PostgreSQL Docker | 5433 | 5432 |
+
+> A porta `5433` foi usada para o PostgreSQL do Docker para evitar conflito com uma instalação local do PostgreSQL usando a porta padrão `5432`.
+
+### Testar a API
+
+Com os containers rodando, é possível testar:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/service-orders
+```
+
+Se o banco estiver vazio, o retorno esperado é:
+
+```json
+[]
+```
+
+### Parar os containers
+
+```powershell
+docker compose down
+```
+
+### Parar e apagar os dados do banco Docker
+
+```powershell
+docker compose down -v
+```
+
+> Use `-v` com cuidado, pois ele remove o volume do PostgreSQL e apaga os dados salvos no banco Docker.
+
+### Ver containers ativos
+
+```powershell
+docker compose ps
+```
+
+### Ver logs da API
+
+```powershell
+docker compose logs api
+```
+
+### Observação sobre o banco
+
+O banco usado pelo Docker é separado do PostgreSQL local. Portanto, dados criados no PostgreSQL local não aparecem automaticamente no banco Docker, e vice-versa.
+
 ## Como rodar o Flutter Web
 
 Com o backend rodando, abra outro terminal e entre na pasta do app Flutter:
@@ -213,6 +315,7 @@ O app Flutter consome a API local em:
 ```text
 http://127.0.0.1:8000/service-orders
 ```
+
 ## Como testar no Android via USB
 
 Também é possível testar o app em um dispositivo Android físico usando Flutter e ADB.
@@ -233,12 +336,18 @@ flutter devices
 
 ### Rodar o backend
 
-Em um terminal, execute a API normalmente:
+Em um terminal, execute a API manualmente:
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
 python -m uvicorn app.main:app --reload
+```
+
+Ou, se estiver usando Docker:
+
+```powershell
+docker compose up
 ```
 
 A API deve estar disponível em:
