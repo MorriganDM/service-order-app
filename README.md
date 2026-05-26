@@ -213,6 +213,80 @@ O app Flutter consome a API local em:
 ```text
 http://127.0.0.1:8000/service-orders
 ```
+## Como testar no Android via USB
+
+Também é possível testar o app em um dispositivo Android físico usando Flutter e ADB.
+
+### Pré-requisitos
+
+- Android Studio instalado
+- Android SDK configurado
+- Dispositivo Android com modo desenvolvedor ativado
+- Depuração USB ativada
+- Celular conectado ao PC via USB
+
+Verifique se o Flutter reconhece o dispositivo:
+
+```powershell
+flutter devices
+```
+
+### Rodar o backend
+
+Em um terminal, execute a API normalmente:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload
+```
+
+A API deve estar disponível em:
+
+```text
+http://127.0.0.1:8000
+```
+
+### Encaminhar a porta da API para o celular
+
+Como o app usa `http://127.0.0.1:8000`, no Android físico é necessário usar `adb reverse` para redirecionar a porta do celular para a API local do computador.
+
+```powershell
+adb reverse tcp:8000 tcp:8000
+```
+
+Se o `adb` não estiver no PATH, use o caminho completo do SDK:
+
+```powershell
+F:\DevTools\Android\Sdk\platform-tools\adb.exe reverse tcp:8000 tcp:8000
+```
+
+Para conferir:
+
+```powershell
+adb reverse --list
+```
+
+Depois, no navegador do celular, é possível testar:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Se o Swagger abrir no celular, a ponte USB está funcionando.
+
+### Rodar o app no celular
+
+Em outro terminal:
+
+```powershell
+cd mobile/service_order_mobile
+flutter run
+```
+
+O app será instalado em modo debug no dispositivo Android conectado.
+
+> Observação: o `adb reverse` funciona para testes via USB. Para distribuir um APK independente, seria necessário apontar o app para uma API acessível pela rede ou por um servidor publicado.
 
 ## Endpoints principais
 

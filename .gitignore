@@ -22,3 +22,7 @@ backend/service_orders.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Flutter build outputs
+build/
+*.apk
